@@ -8,6 +8,7 @@ if (!apiBaseUrl) throw new Error('VITE_API_BASE_URL must be configured before st
 
 export const apiClient = axios.create({
   baseURL: apiBaseUrl,
+  timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 })
 

@@ -15,7 +15,12 @@ class CorsConfigurationTests(unittest.TestCase):
         with patch.dict(os.environ, {'APP_ENV': 'development'}, clear=True):
             self.assertEqual(
                 config.get_cors_allowed_origins(),
-                ['http://localhost:8083', 'http://127.0.0.1:8083'],
+                [
+                    'http://localhost:5173',
+                    'http://127.0.0.1:5173',
+                    'http://localhost:8083',
+                    'http://127.0.0.1:8083',
+                ],
             )
 
         with patch.dict(
@@ -47,7 +52,12 @@ class CorsConfigurationTests(unittest.TestCase):
         )
 
     def test_allowed_development_origins_and_preflight_headers(self):
-        for origin in ('http://localhost:8083', 'http://127.0.0.1:8083'):
+        for origin in (
+            'http://localhost:5173',
+            'http://127.0.0.1:5173',
+            'http://localhost:8083',
+            'http://127.0.0.1:8083',
+        ):
             for path, method in (
                 ('/auth/login', 'POST'),
                 ('/consent', 'GET'),
