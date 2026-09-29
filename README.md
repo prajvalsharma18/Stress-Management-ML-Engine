@@ -1,19 +1,8 @@
-# stress-management-engine — AI/ML Personnel Welfare Decision Support
+# Stress-Management-Engine — AI/ML Personnel Welfare Decision Support
 
-stress-management-engine is a research and development project that combines operational records, optional consented self-reported wellness data, and an interpretable risk model to support human welfare review. The repository contains a React/TypeScript web frontend and a Flask API with model scoring, explanation, grounded recommendation, alert workflow, and administrator-managed model training capabilities.
+stress-management-engine is a project that combines operational records, optional consented self-reported wellness data, and an interpretable risk model to support human welfare review. The repository contains a React/TypeScript web frontend and a Flask API with model scoring, explanation, grounded recommendation, alert workflow, and administrator-managed model training capabilities.
 
 > **Intended use:** The model produces a prototype decision-support signal. It is not a clinical assessment or diagnosis, and it must not be used to make fitness-for-duty, disciplinary, employment, or other automated personnel decisions. The bundled training data is synthetic and does not establish real-world validity.
-
-## Project map
-
-```text
-stress-management-engine/
-├── README.md                              # Project and AI/ML overview
-├── stress-management-engine-frontend/    # React + TypeScript + Vite web app
-└── stress-management-engine-backend/     # Flask API, ML services, data, and worker
-```
-
-The backend README contains the full API reference, security model, configuration reference, data lifecycle notes, and deployment instructions: [`stress-management-engine-backend/README.md`](stress-management-engine-backend/README.md).
 
 ## AI/ML workflow
 
