@@ -1,0 +1,16 @@
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { ProtectedRoute } from '../auth/ProtectedRoute'
+import { RoleRoute } from '../auth/RoleRoute'
+import { AppLayout } from '../layouts/AppLayout'
+import { AuthLayout } from '../layouts/AuthLayout'
+import { Login } from '../pages/Login'
+import { Forbidden } from '../pages/Forbidden'
+import { NotFound } from '../pages/NotFound'
+import { Dashboard } from '../pages/Dashboard'
+import { useAuth } from '../auth/AuthContext'
+import { getRoleHome } from './roleHome'
+import { WelfareDashboard } from '../pages/welfare/WelfareDashboard'
+import { WelfarePersonnel } from '../pages/welfare/WelfarePersonnel'
+import { WelfarePersonnelCase } from '../pages/welfare/WelfarePersonnelCase'
+function HomeRedirect() { const { user } = useAuth(); if (!user) return <Navigate to="/login" replace />; return <Navigate to={getRoleHome(user.role) || '/403'} replace /> }
+export function AppRoutes() { return <Routes><Route element={<AuthLayout />}><Route path="/login" element={<Login />} /></Route><Route path="/403" element={<Forbidden />} /><Route element={<ProtectedRoute />}><Route element={<AppLayout />}><Route index element={<HomeRedirect />} /><Route element={<RoleRoute allowedRoles={['WELFARE_OFFICER']} />}><Route path="/welfare/dashboard" element={<WelfareDashboard />} /><Route path="/welfare/personnel" element={<WelfarePersonnel />} /><Route path="/welfare/personnel/:personnelId" element={<WelfarePersonnelCase />} /></Route><Route element={<RoleRoute allowedRoles={['COMMANDER']} />}><Route path="/commander/dashboard" element={<Dashboard role="COMMANDER" />} /></Route><Route element={<RoleRoute allowedRoles={['ADMIN']} />}><Route path="/admin/dashboard" element={<Dashboard role="ADMIN" />} /></Route></Route></Route><Route path="*" element={<NotFound />} /></Routes> }

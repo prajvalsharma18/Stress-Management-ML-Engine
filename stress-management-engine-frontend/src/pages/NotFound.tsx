@@ -1,0 +1,2 @@
+import { Link } from 'react-router-dom'
+export function NotFound() { return <div className="mx-auto max-w-xl py-24 text-center"><p className="text-sm font-bold uppercase tracking-[0.2em] text-teal-700">404</p><h1 className="mt-3 text-3xl font-semibold text-slate-950">Page not found</h1><p className="mt-3 text-sm leading-6 text-slate-500">The requested SURAKSHAI workspace does not exist.</p><Link to="/" className="mt-7 inline-flex rounded-lg bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white">Return to dashboard</Link></div> }

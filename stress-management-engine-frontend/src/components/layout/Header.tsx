@@ -1,0 +1,6 @@
+import { LogOut, Menu } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
+import { Breadcrumbs } from './Breadcrumbs'
+
+const roleLabel = (role: string) => role.replace(/_/g, ' ')
+export function Header({ username, role, onMenu, onLogout }: { username: string; role: string; onMenu: () => void; onLogout: () => void }) { const location = useLocation(); return <header className="sticky top-0 z-30 flex min-h-20 items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-6 py-4 backdrop-blur sm:px-8"><div className="flex min-w-0 items-center gap-3"><button className="rounded-lg p-2 hover:bg-slate-100 lg:hidden" onClick={onMenu} aria-label="Open navigation"><Menu className="h-5 w-5" /></button><div className="min-w-0"><Breadcrumbs pathname={location.pathname} /><p className="mt-2 truncate text-sm font-semibold text-slate-800">{roleLabel(role)} workspace</p></div></div><div className="flex shrink-0 items-center gap-3"><div className="hidden text-right sm:block"><p className="text-sm font-semibold text-slate-800">{username}</p><p className="text-xs text-slate-500">{roleLabel(role)}</p></div><button onClick={onLogout} title="Sign out" aria-label="Sign out" className="rounded-lg border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50"><LogOut className="h-4 w-4" /></button></div></header> }

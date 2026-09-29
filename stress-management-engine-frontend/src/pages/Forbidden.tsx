@@ -1,0 +1,2 @@
+import { Link } from 'react-router-dom'
+export function Forbidden() { return <div className="mx-auto max-w-xl py-24 text-center"><p className="text-sm font-bold uppercase tracking-[0.2em] text-amber-700">403</p><h1 className="mt-3 text-3xl font-semibold text-slate-950">Access restricted</h1><p className="mt-3 text-sm leading-6 text-slate-500">Your authenticated role does not have permission to access this workspace.</p><Link to="/" className="mt-7 inline-flex rounded-lg bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white">Return to dashboard</Link></div> }

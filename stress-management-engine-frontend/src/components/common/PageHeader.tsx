@@ -1,0 +1,2 @@
+import { ChevronRight } from 'lucide-react'
+export function PageHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) { return <div className="mb-8"><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-teal-700"><span>Surakshai</span><ChevronRight className="h-3 w-3" /><span>{eyebrow}</span></div><h1 className="text-3xl font-semibold tracking-tight text-slate-950">{title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">{description}</p></div> }
