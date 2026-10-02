@@ -10,6 +10,7 @@ from src.services.wellness_service import WellnessService
 from src.security.audit import get_audit_service
 from src.security.consent import CONSENT_WELLNESS_DATA_PROCESSING
 from src.security.consent import ConsentService
+from src.welfare.workflow_service import WelfareWorkflowService
 from tests.user_test_support import install_test_users
 
 
@@ -146,6 +147,11 @@ class FakeWorkflowService:
             self.intervention['outcome_category'] = outcome_category
         return self.intervention
 
+    def list_interventions_for_staff(self, identity):
+        if identity.get('role') not in {'WELFARE_OFFICER', 'ADMIN'}:
+            raise PermissionError('Forbidden')
+        return [self.intervention] if self.intervention else []
+
 
 class CurrentSurakshaiApiTests(unittest.TestCase):
     @classmethod
@@ -274,6 +280,21 @@ class CurrentSurakshaiApiTests(unittest.TestCase):
         self.assertEqual(self.client.post('/welfare/alerts/alert-1/resolve', json={'resolution_type': 'SUPPORTED'}, headers=welfare).status_code, 200)
         self.assertEqual(self.client.post('/welfare/alerts/alert-1/dismiss', headers=personnel).status_code, 403)
 
+    def test_staff_can_load_persisted_interventions_but_personnel_cannot(self):
+        welfare = self.headers('demo_welfare', 'demo-welfare-password')
+        personnel = self.headers('demo_personnel', 'demo-personnel-password')
+        created = self.client.post(
+            '/welfare/alerts/alert-1/intervention',
+            json={'action_type': 'WELFARE_CHECK_IN'},
+            headers=welfare,
+        )
+        self.assertEqual(created.status_code, 201)
+        response = self.client.get('/welfare/interventions', headers=welfare)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()['count'], 1)
+        self.assertEqual(response.get_json()['interventions'][0]['intervention_id'], 'intervention-1')
+        self.assertEqual(self.client.get('/welfare/interventions', headers=personnel).status_code, 403)
+
     def test_audit_events_are_minimized(self):
         self.client.post('/auth/login', json={'username': 'demo_personnel', 'password': 'wrong-password'})
         events = self.api_server.audit_service.list_events()
@@ -282,6 +303,35 @@ class CurrentSurakshaiApiTests(unittest.TestCase):
         self.assertNotIn('access_token', str(events))
         self.assertNotIn('password_hash', str(events))
 
+
+class WelfareInterventionHistoryServiceTests(unittest.TestCase):
+    def test_list_is_staff_scoped_audited_and_field_minimized(self):
+        class InterventionRepository:
+            def list_for_staff(self):
+                return [{
+                    'intervention_id': 'intervention-1',
+                    'alert_id': 'alert-1',
+                    'personnel_id': 'P001',
+                    'action_type': 'WELFARE_CHECK_IN',
+                    'status': 'PLANNED',
+                    'created_at': '2026-10-01T00:00:00+00:00',
+                    'created_by': 'private-user-id',
+                    'seed_batch_id': 'private-seed-id',
+                }]
+
+        audit = get_audit_service()
+        audit._events.clear()
+        service = WelfareWorkflowService(None, None, None, InterventionRepository(), audit_service=audit)
+        result = service.list_interventions_for_staff({
+            'user_id': 'welfare-user',
+            'role': 'WELFARE_OFFICER',
+        })
+        self.assertEqual(result[0]['intervention_id'], 'intervention-1')
+        self.assertNotIn('created_by', result[0])
+        self.assertNotIn('seed_batch_id', result[0])
+        self.assertEqual(audit.list_events()[-1]['action'], 'WELFARE_INTERVENTIONS_LIST_VIEW')
+        with self.assertRaises(PermissionError):
+            service.list_interventions_for_staff({'user_id': 'personnel-user', 'role': 'PERSONNEL'})
 
 class CurrentComponentContractTests(unittest.TestCase):
     def test_rag_uses_dedicated_surakshai_collection(self):

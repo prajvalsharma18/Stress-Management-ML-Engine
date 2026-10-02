@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import api_server
 from src.db.repositories.personnel_repository import PersonnelRepository
@@ -110,6 +111,13 @@ class PersonnelDirectoryApiTests(unittest.TestCase):
         actions = [event['action'] for event in api_server.audit_service.list_events()]
         self.assertIn('WELFARE_PERSONNEL_VIEW', actions)
         self.assertIn('ACCESS_DENIED', actions)
+
+    def test_commander_is_denied_before_personnel_database_initialization(self):
+        commander = self.headers('demo_commander', 'demo-commander-password')
+        with patch.object(api_server, '_get_personnel_service', side_effect=AssertionError('database service must not initialize')):
+            response = self.client.get('/welfare/personnel/P001', headers=commander)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json(), {'error': 'Forbidden'})
 
     def test_missing_record_returns_not_found(self):
         welfare = self.headers('demo_welfare', 'demo-welfare-password')

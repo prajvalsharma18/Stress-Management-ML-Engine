@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import jwt
+from pymongo.errors import ConfigurationError
 
 import api_server
 import config
@@ -56,6 +57,16 @@ class SecurityHardeningTests(unittest.TestCase):
             limited = self.client.post('/auth/login', json={'username': 'unknown', 'password': 'wrong'})
             self.assertEqual(limited.status_code, 429)
             self.assertIn('Retry-After', limited.headers)
+
+    def test_login_maps_mongodb_configuration_failure_to_safe_503(self):
+        with patch.object(api_server, 'authenticate_user', side_effect=ConfigurationError('database configuration unavailable')):
+            with patch.object(api_server, '_ensure_development_users'):
+                response = self.client.post(
+                    '/auth/login',
+                    json={'username': 'qa-user', 'password': 'qa-password'},
+                )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.get_json(), {'error': 'Authentication service unavailable'})
 
     def test_request_body_limit_has_safe_error(self):
         original = api_server.app.config['MAX_CONTENT_LENGTH']

@@ -8,6 +8,7 @@ import re
 
 from flask import Flask, g, request, jsonify, send_file
 from flask_cors import CORS
+from pymongo.errors import PyMongoError
 from werkzeug.exceptions import HTTPException
 
 from config import (
@@ -554,6 +555,10 @@ def home():
          "Create a welfare intervention",
          "create_welfare_intervention"),
 
+        ("GET", "/welfare/interventions",
+         "List authorized welfare intervention history",
+         "list_welfare_interventions"),
+
         ("POST", "/welfare/alerts/<alert_id>/follow-up",
          "Schedule welfare alert follow-up",
          "schedule_welfare_follow_up"),
@@ -657,7 +662,7 @@ def login():
             data["password"],
             user_service,
         )
-    except (RuntimeError, ValueError):
+    except (PyMongoError, RuntimeError, ValueError):
         audit_service.record_event(
             action="LOGIN_FAILURE",
             result=RESULT_FAILURE,
@@ -1900,7 +1905,9 @@ def list_welfare_personnel():
 @require_auth
 def get_welfare_personnel(personnel_id):
     identity = g.authenticated_identity or {}
-    if not _get_personnel_service().can_view_directory(identity, personnel_id):
+    from src.services.personnel_service import PersonnelService
+
+    if not PersonnelService.can_view_directory(identity, personnel_id):
         return _directory_access_denied(identity, 'View authorized welfare personnel directory record')
     try:
         record = _get_personnel_service().get_directory(identity, personnel_id)
@@ -2224,6 +2231,31 @@ def update_welfare_intervention(intervention_id):
     except (WorkflowError, ValueError) as error:
         return jsonify({"error": str(error)}), 409
 
+    except Exception:
+        return jsonify({
+            "error": "Welfare intervention service unavailable"
+        }), 503
+
+
+@app.route(
+    "/welfare/interventions",
+    methods=["GET"],
+)
+@require_auth
+def list_welfare_interventions():
+    if not _welfare_staff_allowed(g.authenticated_identity):
+        return jsonify({"error": "Forbidden"}), 403
+
+    try:
+        interventions = _get_welfare_workflow_service().list_interventions_for_staff(
+            g.authenticated_identity,
+        )
+        return jsonify({
+            "interventions": interventions,
+            "count": len(interventions),
+        }), 200
+    except PermissionError:
+        return jsonify({"error": "Forbidden"}), 403
     except Exception:
         return jsonify({
             "error": "Welfare intervention service unavailable"

@@ -13,9 +13,9 @@ export const apiClient = axios.create({
 })
 
 apiClient.interceptors.request.use((config) => {
-  const raw = localStorage.getItem(AUTH_STORAGE_KEY)
+  const raw = sessionStorage.getItem(AUTH_STORAGE_KEY)
   if (raw) {
-    try { config.headers.Authorization = `Bearer ${(JSON.parse(raw) as { token: string }).token}` } catch { localStorage.removeItem(AUTH_STORAGE_KEY) }
+    try { config.headers.Authorization = `Bearer ${(JSON.parse(raw) as { token: string }).token}` } catch { sessionStorage.removeItem(AUTH_STORAGE_KEY) }
   }
   return config
 })

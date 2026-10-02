@@ -56,6 +56,7 @@ class RootMetadataTests(unittest.TestCase):
             'POST /welfare/alerts/<alert_id>/acknowledge',
             'POST /welfare/alerts/<alert_id>/review',
             'POST /welfare/alerts/<alert_id>/intervention',
+            'GET /welfare/interventions',
             'POST /welfare/alerts/<alert_id>/follow-up',
             'POST /welfare/alerts/<alert_id>/resolve',
             'POST /welfare/alerts/<alert_id>/dismiss',

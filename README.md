@@ -1,138 +1,294 @@
-# stress-management-engine — AI/ML Personnel Welfare Decision Support
+# ML Stress Engine for CAPF Personnel
 
-stress-management-engine is a research and development project that combines operational records, optional consented self-reported wellness data, and an interpretable risk model to support human welfare review. The repository contains a React/TypeScript web frontend and a Flask API with model scoring, explanation, grounded recommendation, alert workflow, and administrator-managed model training capabilities.
+An ML-focused decision-support engine for longitudinal operational data and authorized, voluntary wellness check-ins. It engineers time-bounded features, scores them with a multiclass XGBoost model, explains each result with SHAP, and supports persistence-based welfare review. Human authorization remains part of every workflow.
 
-> **Intended use:** The model produces a prototype decision-support signal. It is not a clinical assessment or diagnosis, and it must not be used to make fitness-for-duty, disciplinary, employment, or other automated personnel decisions. The bundled training data is synthetic and does not establish real-world validity.
+> **Safety and intended use:** This project is a prototype decision-support aid. Its predictions are not medical diagnoses, fitness-for-duty determinations, disciplinary classifications, employment decisions, or a substitute for qualified human judgment. Wellness participation is voluntary and consent-controlled. The bundled training dataset is synthetic and does not establish real-world validity.
 
-## Project map
+## ML engine at a glance
 
-```text
-stress-management-engine/
-├── README.md                              # Project and AI/ML overview
-├── stress-management-engine-frontend/    # React + TypeScript + Vite web app
-└── stress-management-engine-backend/     # Flask API, ML services, data, and worker
-```
-
-The backend README contains the full API reference, security model, configuration reference, data lifecycle notes, and deployment instructions: [`stress-management-engine-backend/README.md`](stress-management-engine-backend/README.md).
-
-## AI/ML workflow
-
-The online prediction path is consent-aware and runs through the backend:
-
-```text
-Authorized operational records ─┐
-                                ├─> longitudinal feature service
-Current wellness consent +      │      └─> canonical 31-feature vector
-eligible voluntary assessment ──┘                 │
-                                                  v
-                                      active XGBoost classifier
-                                       ├─> risk class + probabilities
-                                       ├─> SHAP explanation (on request)
-                                       └─> grounded welfare guidance (on request)
-```
-
-1. The API checks identity, role, resource access, and (for wellness input) current consent.
-2. The feature service computes operational history features for the requested reference date.
-3. `risk_features.py` maps service output into the ordered feature contract. When consent is absent, revoked, or no eligible assessment exists, wellness measurements are missing and `wellness_available` is `0`.
-4. The active model returns `LOW`, `ELEVATED`, or `HIGH` probabilities and the selected class.
-5. On explanation requests, SHAP TreeExplainer ranks the largest signed contributions for the predicted class.
-6. On recommendation requests, the backend retrieves relevant local welfare knowledge and asks the configured provider to return recommendations with citations to retrieved source IDs. The response is validated before it is returned.
-7. Alerts are evaluated under persistence/cooldown policy and then handled through explicit human review workflows. Prediction does not itself contact a person or trigger an intervention.
-
-The API is the authority for access control and data authorization. Frontend route guards improve navigation but do not replace backend checks.
-
-## Model and feature contract
-
-The current baseline is an **XGBoost multiclass classifier**. Its artifacts are in `stress-management-engine-backend/models/risk/`; the baseline metadata identifies model version `surakshai-risk-v0.1`. The model consumes exactly 31 numeric features in the order declared in `src/ml/feature_schema.py`. The contract version is `surakshai-phase4-feature-v1`.
-
-| Feature group | Signals |
+| Area | Implementation |
 | --- | --- |
-| Duty and schedule | 7/30-day average duty hours, night duty counts and rates, recent trends, current and maximum consecutive duty days |
-| Workload | 7/30-day averages and trend, task average, high-workload days, workload/duty-hours mean |
-| Leave and personnel movement | Days since most recent leave, recent leave days and episodes, recent transfers |
-| Deployment and training | Current/recent deployment duration and count, current deployment intensity, recent training hours and sessions |
-| Voluntary wellness | Latest eligible sleep quality, fatigue, perceived stress, mood/wellbeing, plus the `wellness_available` indicator |
+| Longitudinal input | Duty, workload, leave, deployment, training, and transfer history, computed as of a requested reference date |
+| Optional input | Latest eligible voluntary wellness assessment, only with current processing consent |
+| Feature contract | Ordered 31-feature numeric vector; versioned and validated before inference |
+| Estimator | XGBoost multiclass classifier with `LOW`, `ELEVATED`, and `HIGH` output classes |
+| Explanation | Backend SHAP TreeExplainer; ranked signed contributions for the predicted class |
+| Alert policy | Repeated-observation thresholds, unresolved-alert suppression/escalation, and cooldown |
+| Candidate lifecycle | Admin plan and confirmation, queued worker, isolated candidate artifact, validation, explicit promotion and rollback |
+| Persistence | Existing MongoDB Atlas deployment; database access stays in Flask |
 
-Personnel identifiers, reference dates, dataset split labels, and the target label are metadata or labels; they are not model inputs. The model adapter maps source field aliases, converts deployment intensity categories to numeric values, and preserves the canonical feature order. Missing operational values are represented as `NaN`; model behavior with missing values follows the serialized XGBoost estimator. Training fills missing values using medians computed from the training partition.
+The repository also includes a React/TypeScript interface for personnel, welfare staff, commanders, and administrators. The UI is a client for the ML and workflow APIs; inference, feature construction, consent, authorization, and persistence are backend responsibilities.
 
-### Classes and output
+## Engine architecture
 
-Class codes map to `LOW`, `ELEVATED`, and `HIGH`. Prediction responses include the selected category, per-class probabilities, reference date, model version, and whether the run used `OPERATIONAL_ONLY` or `OPERATIONAL_AND_WELLNESS` data. That data mode is useful context; it does not imply that wellness data was medically evaluated.
+```text
+Authorized request + reference date
+                 │
+                 ▼
+Flask identity / role / personnel-scope / consent checks
+                 │
+                 ├── Atlas repositories: operational history + eligible wellness
+                 │
+                 ▼
+Longitudinal feature engineering (as-of date; 7-day and 30-day windows)
+                 │
+                 ▼
+Canonical feature adapter (31 ordered values; missingness and consent encoded)
+                 │
+                 ▼
+Active XGBoost ──► class probabilities + LOW / ELEVATED / HIGH
+       │
+       ├── SHAP TreeExplainer ──► top signed contributions on request
+       └── Alert persistence policy ──► human review workflow when criteria hold
+```
 
-### Baseline evaluation snapshot
+The browser does not connect directly to Atlas or run XGBoost/SHAP. Flask is the authorization, feature, inference, and data-access boundary. Frontend route guards are for navigation only; the API checks every protected request and personnel scope.
 
-The checked-in metadata reports training-script metrics on the dataset's designated `TEST` partition (80,000 total rows):
+### Supporting services
 
-| Metric | Recorded value |
-| --- | ---: |
-| Accuracy | 0.567 |
-| Macro precision | 0.570 |
-| Macro recall | 0.527 |
-| Macro F1 | 0.518 |
-| LOW class F1 | 0.649 |
-| ELEVATED class F1 | 0.625 |
-| HIGH class F1 | 0.279 |
+- Recommendations retrieve passages from the local welfare knowledge base and may use an optional server-side OpenAI-compatible provider. Responses carry source references and require human review.
+- Reports present privacy-aware risk, trend, contribution, operational, eligible wellness, recommendation, alert, and intervention sections.
+- Atlas persists operational and workflow data. The candidate worker and API must share the configured Atlas database and durable model artifact directory.
 
-These are results on a **synthetic dataset**, not evidence of deployment performance. In particular, the recorded HIGH-class F1 is low. Before any real-world use, the model needs independently reviewed data provenance and labels, leakage and split audits, subgroup and calibration analysis, prospective validation, threshold review, and a governance process involving qualified domain experts. Do not interpret the scores as clinical risk or an individual's underlying state.
+### Request-to-prediction flow
 
-## Explainability and grounded recommendations
+1. The API validates identity, role, linked personnel scope, and the requested reference date.
+2. Repositories load only that person's operational records with event dates and creation times no later than the reference date.
+3. The feature service computes longitudinal values; the wellness service supplies a record only when current consent allows it and the assessment is not after the reference date.
+4. The adapter maps service fields into the model's exact ordered schema, normalizes supported category values, and marks unavailable inputs as missing.
+5. The active model returns probabilities and a class. The API records a minimized audit event with actor, model version, data mode, and reference date.
+6. Explanation, recommendations, and alert evaluation are separate operations. They do not silently create an intervention or automatically act on a person.
+
+## Screenshots: report proof of work
+
+The following supplied screenshots show a three-page generated welfare report, including its risk summary, model contributions, operational summary, recommendations, alert/intervention sections, and privacy notice.
+
+> The report is marked confidential and includes pseudonymous and wellness-related example data. Treat these screenshots as sensitive project material. Do not replace them with reports containing real personnel information or publish them outside an audience authorized to view them.
+
+<details>
+<summary>Page 1 — report identity, risk summary, trends, and contributors</summary>
+
+![Generated welfare report, page 1](docs/proof-of-work/welfare-report-page-1.jpg)
+</details>
+
+<details>
+<summary>Page 2 — operational and voluntary wellness summary</summary>
+
+![Generated welfare report, page 2](docs/proof-of-work/welfare-report-page-2.jpg)
+</details>
+
+<details>
+<summary>Page 3 — recommendations, alert/intervention status, and privacy notice</summary>
+
+![Generated welfare report, page 3](docs/proof-of-work/welfare-report-page-3.jpg)
+</details>
+
+## Longitudinal feature engineering
+
+The feature pipeline is implemented in `stress-management-engine-backend/src/features/feature_engineering.py`, with database orchestration in `src/features/feature_service.py`. It is deterministic for a given personnel record set and reference date. Every source record must belong to the requested personnel member, have a valid event date, and be dated no later than the reference date. When a `created_at` timestamp exists, it must also be no later than that date. This as-of filtering prevents future records from leaking into a historical score.
+
+Windows are calendar-day windows including the reference date: seven days and thirty days. Daily records are aggregated by day where appropriate; trends compare the recent seven-day calculation with its 30-day counterpart. Unavailable history remains missing (`None`/`NaN`) rather than being silently treated as zero. The estimator handles missing values; training-time imputation uses medians fit on the training partition only.
+
+Examples of the temporal calculations:
+
+- Duty hours are summed by day, then divided by the full window length for the 7-day/30-day average. Night-duty frequency is night-duty days divided by observed duty days; a day with multiple records counts once.
+- Workload and task summaries first aggregate records by date. Workload means average observed daily scores; `high_workload_days_30d` counts dates whose highest daily workload score is at least `70`.
+- The current duty streak counts consecutive duty dates ending on the reference date. The 30-day maximum finds the longest consecutive run in that window.
+- `workload_trend`, `duty_hours_trend`, and `night_duty_trend` are the 7-day value minus the corresponding 30-day value. They are missing if either side is unavailable.
+- Leave and deployment date ranges are clipped to the 30-day window and counted by overlapping days. Training hours are prorated across the overlap of completed training sessions with the window.
+
+### Canonical 31-feature contract
+
+The model receives exactly this ordered schema from `src/ml/feature_schema.py`. Personnel IDs, dates, split markers, and the target label are metadata, never model inputs.
+
+| Group | Features | Meaning |
+| --- | --- | --- |
+| Duty and schedule | `duty_hours_7d_avg`, `duty_hours_30d_avg`, `night_duty_7d_count`, `night_duty_30d_count`, `night_duty_frequency_7d`, `night_duty_frequency_30d` | Average duty hours, night-duty days, and night-duty share of duty days in short and baseline windows |
+| Workload | `workload_7d_avg`, `workload_30d_avg`, `workload_trend`, `average_tasks_30d`, `high_workload_days_30d`, `workload_duty_hours_mean_30d` | Mean workload, 7-day minus 30-day workload, tasks, high-workload days, and workload-record duty-hour average |
+| Duty continuity and trend | `current_consecutive_duty_days`, `max_consecutive_duty_days_30d`, `duty_hours_trend`, `night_duty_trend` | Current duty streak, longest 30-day streak, and recent-minus-baseline duty-hour/night-duty rates |
+| Leave | `days_since_most_recent_leave`, `leave_days_30d`, `leave_episodes_30d` | Days since latest completed leave and leave days/episodes overlapping the 30-day window |
+| Deployment | `current_deployment_days`, `deployment_days_30d`, `deployment_count_30d`, `deployment_intensity_current` | Current assignment duration, deployment-day union and episodes in 30 days, and current intensity |
+| Training and movement | `training_hours_30d`, `training_session_count_30d`, `transfer_count_30d` | Completed training hours/sessions and transfer events in the 30-day window |
+| Voluntary wellness | `sleep_quality`, `fatigue_level`, `perceived_stress`, `mood_wellbeing`, `wellness_available` | Latest eligible self-report plus an indicator that consented wellness data was available |
+
+The vector adapter in `src/ml/risk_features.py` validates field order and length, handles source aliases, converts deployment intensity (`LOW` through `VERY_HIGH`) to numeric levels, and rejects non-finite/unparseable values into missing values. When there is no authorized wellness record, all four wellness measurements are `NaN` and `wellness_available` is `0`; with an eligible, consented record the measurements are mapped and the indicator is `1`. Operational-only and operational-plus-wellness data modes are reported explicitly.
+
+### Inference contract
+
+`src/ml/risk_model.py` loads the baseline artifact (or explicitly selected active candidate), then checks the feature list, feature count, feature version, target-class map, and loaded model input size. Predictions return probabilities for `LOW`, `ELEVATED`, and `HIGH`, the selected class, model version, reference date, and data mode. The class order and names are fixed by the model metadata contract. Model loading fails closed when artifacts or metadata do not match the canonical schema.
+
+### Training and candidate governance
+
+The bundled synthetic dataset is `stress-management-engine-backend/data/surakshai_phase4_synthetic_risk_dataset.csv`. Training uses its predefined `TRAIN`, `VALIDATION`, and `TEST` partitions; preprocessing statistics are fit on training data and then applied without fitting on validation/test rows. Training can be initiated through the admin lifecycle or a development-only direct script.
+
+The admin lifecycle (`src/ml/training_service.py`) validates an allow-listed configuration, creates a persistent job after explicit confirmation, and leaves execution to `scripts/run_model_training_worker.py`. A worker writes candidate artifacts separately from the baseline and validates successful completion, feature compatibility, class mapping, metrics, and artifact loadability. A candidate never becomes active automatically. Promotion is an explicit admin action; the active pointer and rollback state are managed separately from candidate output.
+
+The checked-in baseline metadata records approximately 0.567 accuracy, 0.570 macro precision, 0.527 macro recall, and 0.518 macro-F1; per-class F1 is 0.649 LOW, 0.625 ELEVATED, and 0.279 HIGH. These are historical results on synthetic data, not deployment or clinical performance. A development candidate may have different metrics; review its own metadata rather than treating baseline results as a guarantee.
 
 ### SHAP explanations
 
-`src/ml/shap_explainer.py` uses a cached SHAP `TreeExplainer` for the loaded XGBoost estimator. The API reports top contributors for the selected predicted class, including feature label, signed SHAP value, and a direction label. These describe model attribution for this prediction; they do not establish causation or explain a person's wellbeing in a clinical sense. Explanation and recommendation routes can fail independently if SHAP or its compatible runtime dependencies are unavailable.
+`src/ml/shap_explainer.py` creates a cached `shap.TreeExplainer` for the loaded XGBoost estimator. For the same canonical feature vector used for prediction, it selects the SHAP values for the predicted class, normalizes supported SHAP output layouts, and ranks up to five contributions by absolute magnitude. Each result includes a feature key and label, signed `shap_value`, and direction (`increases_predicted_risk` or `decreases_predicted_risk`). Ties retain canonical schema order for stable display. Explanation requests are audited independently from prediction requests.
 
-### Retrieval and optional language model
+SHAP is a model-attribution method: the signed value describes the feature's contribution to this model output relative to its baseline. With the current TreeExplainer defaults for XGBoost, values are in the estimator's raw output space (margin), not percentage points of class probability. SHAP is not a causal effect, clinical explanation, or proof that a factor caused a person's state. Read it alongside input coverage, data mode, reference date, and model version.
 
-Welfare recommendations combine the risk result and explanation with retrieved passages from the local `surakshai_welfare_knowledge` collection. An optional OpenAI-compatible provider may produce structured guidance from this context. Provider configuration uses `SURAKSHAI_LLM_BASE_URL`, `SURAKSHAI_LLM_MODEL`, and `SURAKSHAI_LLM_API_KEY`; without a configured provider, provider-backed recommendation generation fails closed. Returned recommendations must use allowed categories/priorities and cite retrieved source IDs. Generated guidance remains a human-reviewed support aid, not an automatic action.
+### Persistence-based alerts and human review
 
-## Training and model lifecycle
+`src/welfare/alert_policy.py` separates risk scoring from alert qualification. Defaults require two observations of `HIGH` or two of `ELEVATED` within a seven-day persistence window. Repeated `HIGH` maps to `PRIORITY`; repeated `ELEVATED` maps to `ATTENTION`. An unresolved duplicate is suppressed, an existing lower-severity alert can be escalated when higher criteria hold, and a seven-day cooldown applies to new alerts. These settings are configurable in the backend environment. Alert evaluation is a workflow signal; it does not create an intervention automatically. Staff actions and intervention status changes require authorized API operations.
 
-Training uses the bundled file `stress-management-engine-backend/data/surakshai_phase4_synthetic_risk_dataset.csv` and the canonical schema. The trainer uses the dataset's `TRAIN`, `VALIDATION`, and `TEST` split labels, fits XGBoost using the training partition, evaluates on the test partition, and writes the model plus metadata. Default parameters are 300 estimators, learning rate 0.05, max depth 6, subsample 0.9, column subsample 0.9, and random seed 42.
+### Model and use limitations
 
-For administrator-managed training, the API accepts a constrained plan, requires a separate confirmation, and stores a job in MongoDB. A separate worker claims queued work, writes candidate artifacts, and validates feature version, feature list/count, classes, metrics, and model loadability. A successful candidate does **not** become active automatically. Promotion is an explicit administrator action; the active pointer and rollback metadata are stored alongside model artifacts. API instances and the worker must share the same MongoDB and durable model directory.
+Risk categories and SHAP values describe model output; they do not establish causes or a person's clinical state. The bundled dataset is synthetic and its metrics are not evidence of field performance. Before any operational use, the model would need independent data provenance and label review, leakage and split audits, subgroup and calibration analysis, prospective validation, threshold review, and qualified governance. It must not be used for diagnosis, discipline, employment, or fitness decisions.
 
-The direct script `scripts/train_phase4_risk_model.py` writes to the baseline model directory and is intended for development. Do not use it as the production candidate-promotion workflow.
+## Access roles
 
-## Running locally
+| Role | Authorized scope |
+| --- | --- | --- |
+| `PERSONNEL` | Own risk, history, explanation, consent, voluntary wellness, support, recommendations, and report |
+| `WELFARE_OFFICER` | Authorized aggregate and case review; human-managed alert, support, and intervention workflows |
+| `COMMANDER` | Aggregate operational summary; no individual case or wellness access |
+| `ADMIN` | User administration and explicit model-training lifecycle actions |
 
-Requirements: Python 3.10+, Node.js/npm, MongoDB, and the Python packages in the backend `requirements.txt`.
+Flask enforces actual access on every API request. The React/Vite frontend is a thin role-based interface and is not a security control.
 
-1. Configure the backend by copying `stress-management-engine-backend/.env.example` to `.env`; set a development JWT secret, MongoDB URI/database, and browser CORS origin. The Vite development server defaults to `http://localhost:5173`, so include that exact origin in `CORS_ALLOWED_ORIGINS`.
-2. Install backend dependencies and start MongoDB. From the backend directory, run `python api_server.py` (default API: `http://localhost:5000`).
-3. Configure the frontend `VITE_API_BASE_URL` (the provided example uses `http://localhost:5000`). From the frontend directory, run `npm install` and `npm run dev`.
-4. Persisted authentication and most application features require MongoDB and an appropriately provisioned account. Demo users are opt-in and development-only; see the backend README for safe setup and seed instructions.
-5. To process administrator-confirmed model jobs, run `python scripts/run_model_training_worker.py` from the backend directory in a separate process.
+## Local development setup
 
-For the direct development training script, use the backend Python environment and run `python scripts/train_phase4_risk_model.py` from the backend directory. It writes into `models/risk/`, so preserve the distinction between local experimentation and the validated candidate lifecycle.
+### Requirements
 
-## API and frontend status
+- Python 3.10 or newer and pip
+- Node.js/npm compatible with the Vite version in the frontend lockfile
+- Access to the **existing MongoDB Atlas deployment** and its development/staging database
 
-The Flask API exposes authentication, consent, operational records and features, risk prediction/history/explanation, welfare recommendations/reports, alerts, support requests, personnel directory, admin user/integration management, and model lifecycle endpoints. The frontend uses a shared Axios client and typed API modules under `stress-management-engine-frontend/src/api/`.
+This project uses Atlas. Do not install or start local MongoDB, create a second database, or replace Atlas with a local/Docker database. Keep the existing Atlas URI in the backend's private `.env` or environment configuration; never paste it into this README, source code, screenshots, or frontend variables.
 
-The web UI currently implements login, role-based routing, welfare dashboard/directory/case views, and basic commander/admin dashboards. Several API modules exist without complete corresponding frontend screens (including consent, wellness submission, support requests, and admin user/model management). The API surface should therefore not be read as a claim that every backend feature is available through the current UI. Verify local CORS settings against the actual frontend origin.
+### 1. Configure the backend
 
-## Repository guide
+From the repository root, create a backend virtual environment and install the pinned backend requirements:
 
-| Path | Responsibility |
+```powershell
+cd stress-management-engine-backend
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Edit `stress-management-engine-backend/.env` locally. Set `MONGODB_URI` to the already authorized Atlas connection and `MONGODB_DATABASE` to the existing development/staging database. Configure distinct development values for `JWT_SECRET_KEY` and `PSEUDONYMIZATION_SECRET`, and include the frontend origin in `CORS_ALLOWED_ORIGINS`. Do not commit `.env`. Do not copy live credentials into examples or issue reports.
+
+The checked-in `.env.example` is a template, not a working Atlas configuration. Review every database setting before starting the API; do not use its placeholder/local URI as a replacement for the existing Atlas deployment.
+
+### 2. Optionally enable development demo accounts
+
+Demo accounts are created only when both conditions hold:
+
+```dotenv
+APP_ENV=development
+SURAKSHAI_ENABLE_DEV_USER_SEED=1
+```
+
+The backend needs a working Atlas connection before it can persist or authenticate these users. Seeding skips usernames that already exist. A personnel account is linked only if its personnel record exists at bootstrap time; otherwise it may be created without a personnel link and personnel-specific routes will not work. Do not enable this setting in production or use these passwords with real data.
+
+### 3. Start the Flask API
+
+In the backend directory, with the virtual environment active:
+
+```powershell
+python api_server.py
+```
+
+The default local API address is `http://localhost:5000`. `GET /health` checks Flask liveness only; it does not prove Atlas connectivity. Verify database access by signing in and using an authenticated, database-backed endpoint.
+
+### 4. Optional web interface
+
+The React/Vite client is optional for API and model development. In a second terminal:
+
+```powershell
+cd stress-management-engine-frontend
+npm ci
+npm run dev
+```
+
+The Vite development address is normally `http://localhost:5173`. `VITE_API_BASE_URL` selects the Flask API origin. Frontend configuration is browser-visible; never put database credentials, JWT signing secrets, or provider keys in it.
+
+### 5. Optional model-training worker
+
+Administrator-confirmed training jobs require the worker to run separately from Flask:
+
+```powershell
+cd stress-management-engine-backend
+.\.venv\Scripts\Activate.ps1
+python scripts/run_model_training_worker.py
+```
+
+The worker and API must share the same Atlas database and durable model-artifact storage. A successful job produces a candidate that still requires explicit review and promotion.
+
+## Development demo accounts
+
+The `DEVELOPMENT_USERS` mapping in `stress-management-engine-backend/src/security/demo_users.py` defines these hard-coded development fixtures. They are **not production accounts or secrets suitable for deployment**. Use them only with `APP_ENV=development`, an isolated development/staging Atlas database, and no real personnel records. Change or remove them before exposing any environment to an untrusted network.
+
+| Username | Role | Personnel link | Development password |
+| --- | --- | --- | --- |
+| `demo_personnel` | `PERSONNEL` | `P001` when that personnel record exists | `demo-personnel-password` |
+| `mock_personnel` | `PERSONNEL` | `P900` when that personnel record exists | `SurakshAI@Personnel2026!` |
+| `demo_welfare` | `WELFARE_OFFICER` | — | `demo-welfare-password` |
+| `demo_commander` | `COMMANDER` | — | `demo-commander-password` |
+| `demo_admin` | `ADMIN` | — | `demo-admin-password` |
+
+These are bootstrap definitions: account creation is opt-in and database-backed. If an account already exists, bootstrap leaves it unchanged, including its password. If `P001` or `P900` is absent from the selected database, the corresponding personnel account can exist without a linked personnel record. Never assume demo accounts exist in Atlas until development seeding has been enabled and the login has been verified.
+
+## Configuration and security
+
+The backend loads `stress-management-engine-backend/.env`; process environment variables take precedence. The complete configuration reference is in the [backend README](stress-management-engine-backend/README.md#configuration). Important settings include:
+
+| Setting | Purpose |
 | --- | --- |
-| `stress-management-engine-backend/src/features/` | Operational history feature generation |
-| `stress-management-engine-backend/src/ml/feature_schema.py` | Canonical 31-feature and class contract |
-| `stress-management-engine-backend/src/ml/risk_features.py` | Input normalization and wellness-aware vector adapter |
-| `stress-management-engine-backend/src/ml/risk_model.py` | Model loading, compatibility validation, prediction |
-| `stress-management-engine-backend/src/ml/risk_service.py` | Authorization-aware inference and auditing |
-| `stress-management-engine-backend/src/ml/shap_explainer.py` | SHAP explanation generation |
-| `stress-management-engine-backend/src/ml/welfare_rag.py` | Local knowledge retrieval |
-| `stress-management-engine-backend/src/ml/welfare_provider.py` | Optional recommendation provider |
-| `stress-management-engine-backend/src/ml/training_service.py` | Training plans, worker lifecycle, candidate validation and promotion |
-| `stress-management-engine-backend/scripts/train_phase4_risk_model.py` | Dataset training/evaluation script |
-| `stress-management-engine-backend/models/risk/` | Baseline model, metadata, and runtime-managed active/candidate state |
-| `stress-management-engine-backend/tests/` | Backend API, security, workflow, and ML-related tests |
-| `stress-management-engine-frontend/src/api/` | Typed frontend API clients |
+| `APP_ENV` | `development`, `test`, or `production`; demo bootstrap is allowed only in development. |
+| `MONGODB_URI`, `MONGODB_DATABASE` | Existing Atlas connection and the selected database. Keep the URI secret. |
+| `JWT_SECRET_KEY`, `PSEUDONYMIZATION_SECRET` | Backend-only secrets; use distinct, random values. |
+| `CORS_ALLOWED_ORIGINS` | Explicit browser-origin allowlist; production requires HTTPS origins. |
+| `VITE_API_BASE_URL` | Public frontend setting for the Flask API origin only. |
+| `SURAKSHAI_LLM_BASE_URL`, `SURAKSHAI_LLM_MODEL`, `SURAKSHAI_LLM_API_KEY` | Optional server-side recommendation provider configuration. Keep the API key out of the frontend. |
+
+The current code retains some legacy internal names in model metadata, environment variables, routes, and paths. Those names are implementation identifiers; this project's user-facing name in this README is **ML Stress Engine for CAPF Personnel**.
+
+The frontend stores the access token in tab-scoped `sessionStorage`, sends it as a bearer token, and clears protected state on an unauthorized response. The backend applies authentication, role checks, ownership checks, consent rules, validation, and audit logging. Do not weaken those checks to make a demo account work.
+
+## Tests and build
+
+From the frontend directory:
+
+```powershell
+npm run typecheck
+npm run build
+```
+
+From the backend directory, with its virtual environment active:
+
+```powershell
+python -m unittest discover -s tests -p "test_*.py" -v
+```
+
+The frontend currently defines typecheck, build, development, and preview scripts; it does not define an npm test or lint script. Do not run synthetic staging seed/reset scripts against production or an Atlas database containing unrelated data.
+
+## Repository map
+
+| Path | Purpose |
+| --- | --- |
+| `stress-management-engine-frontend/` | React/TypeScript web application |
+| `stress-management-engine-backend/api_server.py` | Flask routes and API composition |
+| `stress-management-engine-backend/src/security/` | Authentication, consent, authorization, audit, and demo fixtures |
+| `stress-management-engine-backend/src/features/` | Operational feature generation |
+| `stress-management-engine-backend/src/ml/` | Feature contract, model inference, SHAP, retrieval, and training lifecycle |
+| `stress-management-engine-backend/src/welfare/` | Alert, support, intervention, and welfare repositories/workflows |
+| `stress-management-engine-backend/src/reports/` | Privacy-aware report generation |
+| `stress-management-engine-backend/models/risk/` | Baseline model and metadata; runtime-managed candidate/active state |
+| `stress-management-engine-backend/scripts/` | Development seed and worker commands |
+| `stress-management-engine-backend/tests/` | Python API, security, persistence, and model tests |
+| `docs/proof-of-work/` | Supplied report screenshots shown above |
 
 ## Further documentation
 
-- [Backend setup, API reference, configuration, security, and deployment](stress-management-engine-backend/README.md)
-- [Backend requirements](stress-management-engine-backend/requirements.txt)
+- [Backend setup, configuration, API reference, security, and deployment](stress-management-engine-backend/README.md)
+- [Backend dependencies](stress-management-engine-backend/requirements.txt)
 - [Canonical model feature schema](stress-management-engine-backend/src/ml/feature_schema.py)
-- [Baseline model metadata and recorded evaluation](stress-management-engine-backend/models/risk/metadata.json)
-
+- [Baseline model metadata](stress-management-engine-backend/models/risk/metadata.json)

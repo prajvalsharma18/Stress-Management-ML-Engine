@@ -43,14 +43,15 @@ class WellnessRepository:
         if duplicate is not None:
             raise DuplicateWellnessAssessment('An assessment already exists for this personnel member and date')
         try:
-            collection.insert_one(assessment)
+            document = dict(assessment)
+            collection.insert_one(document)
         except Exception as error:
             if error.__class__.__name__ == 'DuplicateKeyError':
                 raise DuplicateWellnessAssessment(
                     'An assessment already exists for this personnel member and date'
                 ) from error
             raise
-        return dict(assessment)
+        return self._without_mongo_id(document)
 
     def list_for_personnel(self, personnel_id, *, start_date=None, end_date=None):
         collection = self._require_collection()

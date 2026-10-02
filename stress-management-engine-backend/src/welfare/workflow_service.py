@@ -3,6 +3,8 @@
 from datetime import date, timedelta
 
 from src.security.audit import RESULT_SUCCESS, get_audit_service
+from src.security.permissions import PERMISSION_VIEW_ALERTS, ROLE_ADMIN, ROLE_WELFARE_OFFICER
+from src.security.rbac import has_permission
 from src.welfare.alert_policy import AlertPolicy
 from src.welfare.repositories import ACTIVE_STATUSES, WelfareAlertRepository, WelfareInterventionRepository, RiskPredictionRepository, new_id, utc_now
 
@@ -111,6 +113,37 @@ class WelfareWorkflowService:
 
     def list_alerts(self, personnel_id=None, statuses=None):
         return self.alerts.list(personnel_id, statuses)
+
+    def list_interventions_for_staff(self, identity):
+        if (
+            not identity
+            or identity.get('role') not in {ROLE_WELFARE_OFFICER, ROLE_ADMIN}
+            or not has_permission(identity, PERMISSION_VIEW_ALERTS)
+        ):
+            raise PermissionError('Forbidden')
+
+        records = self.interventions.list_for_staff()
+        allowed_fields = (
+            'intervention_id', 'alert_id', 'personnel_id', 'action_type',
+            'status', 'created_at', 'updated_at', 'scheduled_follow_up',
+            'completed_at', 'outcome_category',
+        )
+        response = [
+            {field: record[field] for field in allowed_fields if field in record}
+            for record in records
+        ]
+        identity = identity or {}
+        self.audit.record_event(
+            actor_user_id=identity.get('user_id'),
+            actor_role=identity.get('role'),
+            action='WELFARE_INTERVENTIONS_LIST_VIEW',
+            resource_type='welfare_interventions',
+            result=RESULT_SUCCESS,
+            source='welfare_workflow_service.list_interventions_for_staff',
+            purpose='Review authorized human welfare intervention history',
+            count=len(response),
+        )
+        return response
 
     def get_alert(self, alert_id):
         alert = self.alerts.get(alert_id)

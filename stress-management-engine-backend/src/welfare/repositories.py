@@ -198,6 +198,11 @@ class WelfareInterventionRepository:
             raise RuntimeError('Welfare intervention database is unavailable')
         return [_clean(item) for item in self.collection.find({'alert_id': alert_id}).sort('created_at', -1)]
 
+    def list_for_staff(self):
+        if self.collection is None:
+            raise RuntimeError('Welfare intervention database is unavailable')
+        return [_clean(item) for item in self.collection.find({}).sort('created_at', -1)]
+
     def get(self, intervention_id):
         if self.collection is None:
             raise RuntimeError('Welfare intervention database is unavailable')
