@@ -4,6 +4,9 @@ An ML-focused decision-support engine for longitudinal operational data and auth
 
 > **Safety and intended use:** This project is a prototype decision-support aid. Its predictions are not medical diagnoses, fitness-for-duty determinations, disciplinary classifications, employment decisions, or a substitute for qualified human judgment. Wellness participation is voluntary and consent-controlled. The bundled training dataset is synthetic and does not establish real-world validity.
 <img width="1917" height="902" alt="Screenshot 2026-10-03 011919" src="https://github.com/user-attachments/assets/5af2d7b0-c272-44e5-9d34-0fcf2cc9a703" />  <img width="1886" height="910" alt="Screenshot 2026-10-03 012024" src="https://github.com/user-attachments/assets/eb129f53-7628-48fe-9d36-3274899a1828" />
+<img width="1241" height="1754" alt="welfare-report_page-0001" src="https://github.com/user-attachments/assets/f726dc15-3a3c-4bb8-bd53-4d1479f33f6b" />
+<img width="1241" height="1754" alt="welfare-report_page-0002" src="https://github.com/user-attachments/assets/24613e62-0ecf-4213-ba02-f6c6a0b471e3" />
+<img width="1241" height="1754" alt="welfare-report_page-0003" src="https://github.com/user-attachments/assets/c359d4c7-75b7-4767-8e4a-14061f7416cd" />
 
 
 
