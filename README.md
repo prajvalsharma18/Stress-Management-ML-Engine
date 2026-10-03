@@ -294,7 +294,6 @@ The frontend currently defines typecheck, build, development, and preview script
 
 ## Further documentation
 
-- [Backend setup, configuration, API reference, security, and deployment](stress-management-engine-backend/README.md)
 - [Backend dependencies](stress-management-engine-backend/requirements.txt)
 - [Canonical model feature schema](stress-management-engine-backend/src/ml/feature_schema.py)
 - [Baseline model metadata](stress-management-engine-backend/models/risk/metadata.json)
