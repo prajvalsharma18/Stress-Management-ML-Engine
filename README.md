@@ -2,7 +2,7 @@
 
 An ML-focused decision-support engine for longitudinal operational data and authorized, voluntary wellness check-ins. It engineers time-bounded features, scores them with a multiclass XGBoost model, explains each result with SHAP, and supports persistence-based welfare review. Human authorization remains part of every workflow.
 
-> **Safety and intended use:** This project is a prototype decision-support aid. Its predictions are not medical diagnoses, fitness-for-duty determinations, disciplinary classifications, employment decisions, or a substitute for qualified human judgment. Wellness participation is voluntary and consent-controlled. The bundled training dataset is synthetic and does not establish real-world validity.
+
 <img width="1917" height="902" alt="Screenshot 2026-10-03 011919" src="https://github.com/user-attachments/assets/5af2d7b0-c272-44e5-9d34-0fcf2cc9a703" />  <img width="1886" height="910" alt="Screenshot 2026-10-03 012024" src="https://github.com/user-attachments/assets/eb129f53-7628-48fe-9d36-3274899a1828" />
 <img width="1241" height="1754" alt="welfare-report_page-0001" src="https://github.com/user-attachments/assets/f726dc15-3a3c-4bb8-bd53-4d1479f33f6b" />
 <img width="1241" height="1754" alt="welfare-report_page-0002" src="https://github.com/user-attachments/assets/24613e62-0ecf-4213-ba02-f6c6a0b471e3" />
@@ -65,7 +65,7 @@ The browser does not connect directly to Atlas or run XGBoost/SHAP. Flask is the
 5. The active model returns probabilities and a class. The API records a minimized audit event with actor, model version, data mode, and reference date.
 6. Explanation, recommendations, and alert evaluation are separate operations. They do not silently create an intervention or automatically act on a person.
 
-## Screenshots: report proof of work
+
 
 The following supplied screenshots show a three-page generated welfare report, including its risk summary, model contributions, operational summary, recommendations, alert/intervention sections, and privacy notice.
 
