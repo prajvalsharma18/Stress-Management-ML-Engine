@@ -2,6 +2,9 @@
 
 An ML-focused decision-support engine for longitudinal operational data and authorized, voluntary wellness check-ins. It engineers time-bounded features, scores them with a multiclass XGBoost model, explains each result with SHAP, and supports persistence-based welfare review. Human authorization remains part of every workflow.
 
+WORKING ====> https://stress-management-ml-engine.onrender.com
+BACKEND ACTIVATE =====> https://stress-management-ml-engine-backend.onrender.com/
+
 
 <img width="1917" height="902" alt="Screenshot 2026-10-03 011919" src="https://github.com/user-attachments/assets/5af2d7b0-c272-44e5-9d34-0fcf2cc9a703" />  <img width="1886" height="910" alt="Screenshot 2026-10-03 012024" src="https://github.com/user-attachments/assets/eb129f53-7628-48fe-9d36-3274899a1828" />
 <img width="1241" height="1754" alt="welfare-report_page-0001" src="https://github.com/user-attachments/assets/f726dc15-3a3c-4bb8-bd53-4d1479f33f6b" />
